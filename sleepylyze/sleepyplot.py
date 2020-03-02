@@ -10,6 +10,7 @@
 import itertools
 import igraph as ig
 import math
+import matplotlib
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import numpy as np 
@@ -17,10 +18,16 @@ import os
 import pandas as pd
 import shapely.geometry as SG
 
+from matplotlib.widgets import Slider
+from pandas.plotting import register_matplotlib_converters
+from scipy.signal import find_peaks
+register_matplotlib_converters()
+
 
 
 def plotEEG(d, raw=True, filtered=False, spindles=False, spindle_rejects=False):
-    """ plot multichannel EEG w/ option for double panel raw & filtered 
+    """ plot multichannel EEG w/ option for double panel raw & filtered. For short, pub-ready
+        figures. Use vizeeg for data inspection 
     
     Parameters
     ----------
@@ -219,7 +226,7 @@ def plotEEG_singlechan(d, chan, raw=True, filtered=False, rms=False, thresholds=
     
     return fig
 
-def vizeeg(d, raw=True, filtered=False, spindles=False, spindle_rejects=False):
+def vizeeg(d, raw=True, filtered=False, spindles=False, spindle_rejects=False, slider=True, win_width=15):
     """ vizualize multichannel EEG w/ option for double panel raw and/or filtered. Optimized for
         inspecting spindle detections (title/axis labels removed for space)
     
@@ -234,6 +241,11 @@ def vizeeg(d, raw=True, filtered=False, spindles=False, spindle_rejects=False):
         Option to plot spindle detections
     spindle_rejects: bool, optional, default: False
         Option to plot rejected spindle detections
+    slider: bool (default: False)
+        Option to implement an X-axis slider instead of built-in matplotlib zoom. Useful
+        for inspecting long segments of EEG with a set window
+    win_width: int (default: 15)
+        If using slider option, number of seconds to set window width
         
     Returns
     -------
@@ -260,7 +272,6 @@ def vizeeg(d, raw=True, filtered=False, spindles=False, spindle_rejects=False):
         title.append('Filtered')
     
 
-
     # flatten events list by channel for plotting
     if spindles == True:
         sp_eventsflat = [list(itertools.chain.from_iterable(d.spindle_events[i])) for i in d.spindle_events.keys()]
@@ -268,7 +279,7 @@ def vizeeg(d, raw=True, filtered=False, spindles=False, spindle_rejects=False):
         sp_rej_eventsflat = [list(itertools.chain.from_iterable(d.spindle_rejects[i])) for i in d.spindle_rejects.keys()]   
 
     # set channels for plotting
-    channels = [x[0] for x in d.data.columns]
+    channels = [x[0] for x in d.data.columns if x[0] not in ['EKG', 'EOG_L', 'EOG_R']]
     
     # set offset multiplier (distance between channels in plot)
     mx = 0.1
@@ -281,7 +292,8 @@ def vizeeg(d, raw=True, filtered=False, spindles=False, spindle_rejects=False):
     
     for dat, ax, t in zip(data, axs.flatten(), title):
         for i, c in enumerate(channels):
-            # normalize each channel to [0, 1]
+            # normalize each channel to [0, 1] -> can also simply subtract the mean (cleaner looking), but
+            # normalization preserves relative differences between channels while putting them on a common scale
             dat_ser = pd.Series(dat[(c, t)], index=dat.index)
             norm_dat = (dat_ser - min(dat_ser))/(max(dat_ser)-min(dat_ser)) - i*mx # subtract i for plotting offset
             yticks.append(np.nanmedian(norm_dat))
@@ -303,7 +315,6 @@ def vizeeg(d, raw=True, filtered=False, spindles=False, spindle_rejects=False):
         #ax.set_title(t)
         
         # set y axis params
-        #yticks = list(np.arange(mx, -(len(channels)*mx)+mx, -mx))
         ax.set_yticks(yticks)
         ax.set_yticklabels(channels)
         ax.set_ylim(bottom = yticks[-1]-3*mx, top=yticks[0]+3*mx)
@@ -312,20 +323,168 @@ def vizeeg(d, raw=True, filtered=False, spindles=False, spindle_rejects=False):
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
 
-        # plot minor axes
+    # if data roughly 5 mins or less, set minor x-axes
+    if (d.data.index[-1] - d.data.index[0]).total_seconds() < 400:
         seconds = mdates.SecondLocator()
         ax.xaxis.set_minor_locator(seconds)
         ax.grid(axis='x', which='minor', linestyle=':')
         ax.grid(axis='x', which='major')
     
     # set overall parameters
-    fig.tight_layout(pad=0)  # remove figure padding
+    #fig.tight_layout(pad=0)  # remove figure padding --> this pushes slider onto fig
     
     # remove labels to maximize on-screen plot area
     #plt.xlabel('Time')
     #fig.suptitle(d.metadata['file_info']['in_num'])
 
-    return fig, axs
+    # option to use x-axis slider insted of matplotlib zoom
+    if slider:
+        # plot minor axes --> requires slider for segments longer than 5mins
+        seconds = mdates.SecondLocator()
+        ax.xaxis.set_minor_locator(seconds)
+        ax.grid(axis='x', which='minor', linestyle=':')
+        ax.grid(axis='x', which='major')
+
+        # set initial window
+        x_min_index = 0
+        x_max_index = win_width*int(d.s_freq)
+
+        x_min = d.data.index[x_min_index]
+        x_max = d.data.index[x_max_index]
+        x_dt = x_max - x_min
+        
+        y_min, y_max = plt.axis()[2], plt.axis()[3]
+
+        plt.axis([x_min, x_max, y_min, y_max])
+
+        axcolor = 'lightgoldenrodyellow'
+        axpos = plt.axes([0.2, 0.1, 0.65, 0.03], facecolor=axcolor)
+        
+        slider_max = len(d.data) - x_max_index - 1
+
+        # set slider position object
+        spos = Slider(axpos, 'Pos', matplotlib.dates.date2num(x_min), matplotlib.dates.date2num(d.data.index[slider_max]))
+
+        # format date names
+        #plt.gcf().autofmt_xdate()
+        
+        # create slider update function
+        def update(val):
+            pos = spos.val
+            xmin_time = matplotlib.dates.num2date(pos)
+            xmax_time = matplotlib.dates.num2date(pos) + x_dt
+            ax.axis([xmin_time, xmax_time, y_min, y_max])
+            fig.canvas.draw_idle()
+
+        # update slider position on click
+        spos.on_changed(update)
+
+    #return fig, axs
+    return fig
+
+
+def plot_spindlepower_chan_i(n, chan, show_peaks='spins', dB=False):
+    """ Plot individual spindle spectra for a given channel 
+
+        Parameters
+        ----------
+        n: nrem.NREM object
+        chan: str
+            channel to plot
+        show_peaks: bool or str (default: 'spins')
+            which peaks to plot. 'spins' plots only peaks in the spindle range (options: None, 'spins', 'all')
+
+    """
+    
+    ncols = int(np.sqrt(len(n.spindle_psd_i[chan])))
+    nrows = len(n.spindle_psd_i[chan])//ncols + (len(n.spindle_psd_i[chan]) % ncols > 0) 
+    fig, axs = plt.subplots(nrows = nrows, ncols = ncols, figsize=(16, 12))
+    fig.subplots_adjust(hspace=0.8, wspace=0.5)
+    
+    for spin, ax in zip(n.spindle_psd_i[chan], axs.flatten()):    
+        # transform units
+        if dB == True:
+            pwr = 10 * np.log10(n.spindle_psd_i[chan][spin].values)
+            ylabel = 'Power (dB)'
+        else:
+            pwr = n.spindle_psd_i[chan][spin].values
+            ylabel = 'Power (mV^2/Hz)'
+
+        # highlight spindle range. aquamarine or lavender works here too
+        spin_range = n.metadata['spindle_analysis']['spin_range']
+        ax.axvspan(spin_range[0], spin_range[1], color='lavender', alpha=0.8, zorder=1)
+        # plot spectrum
+        ax.plot(n.spindle_psd_i[chan][spin].index, pwr, color='black', alpha=0.9, linewidth=0.8, zorder=2)
+
+        # grab the peaks on the power spectrum
+        p_idx, props = find_peaks(n.spindle_psd_i[chan][spin])
+        peaks = n.spindle_psd_i[chan][spin].iloc[p_idx]
+        # plot all peaks
+        if show_peaks == 'all':
+            ax.scatter(x=peaks.index, y=peaks.values, alpha=0.5, zorder=3)
+        # plot only peaks in the spindle range
+        elif show_peaks == 'spins':
+            peaks_spins = peaks[(peaks.index > spin_range[0]) & (peaks.index < spin_range[1])]
+            ax.scatter(x=peaks_spins.index, y=peaks_spins.values, alpha=0.5, zorder=3)
+
+
+        # set subplot params
+        ax.set_xlim(0, 25)
+        ax.margins(y=0)
+        ax.set_xticks([5, 10, 15, 20])
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.set_title(spin, size='x-small')
+        ax.tick_params(axis='both', labelsize='x-small', labelleft=False)
+    
+    # delete empty subplots --> this can probably be combined with previous loop
+    for i, ax in enumerate(axs.flatten()):
+        if i >= len(n.spindle_psd_i[chan]):
+            fig.delaxes(ax)
+    
+    # set figure params   
+    fig.tight_layout(pad=1, rect=[0, 0, 1, 0.93])
+    fig.text(0.5, 0, 'Frequency (Hz)', ha='center', size='large', weight='semibold')
+    fig.text(0, 0.5, ylabel, va='center', rotation='vertical', size='large', weight='semibold')
+    fig.suptitle(n.metadata['file_info']['fname'].split('.')[0] + f'\n\nSpindle Power {chan}', size='large', weight='semibold')
+
+    return fig
+
+def spec_peaks(n, chan, x):
+    """ Helper to grab spectral peaks from individual spindles and visualize
+        Plots two-panels: Upper = power spectrum, Lower = spindle tracing (w/ zero-pad) 
+
+        Parameters
+        ----------
+        n: nrem.NREM object
+            compatible with psd_type = 'i' under analyze_spindles method
+        chan: str
+            Channel to plot
+        x: int
+            Spindle # to plot
+
+        Returns
+        -------
+        matplotlib.Figure
+    """
+    
+    # grab the peaks on the power spectrum
+    p_idx, props = find_peaks(n.spindle_psd_i[chan][x])
+    peaks = n.spindle_psd_i[chan][x].iloc[p_idx]
+
+    
+    # plot the peak detections
+    fig, axs = plt.subplots(2, 1, figsize=(4,3))
+    axs[0].plot(n.spindle_psd_i[chan][x])
+    axs[0].scatter(x=peaks.index, y=peaks.values)
+    # plot the raw spindle + zpad
+    axs[1].plot(n.spindles_zpad[chan][x], alpha=1, lw=0.8)
+
+    fig.suptitle(x)
+
+    return fig
+
+### Macroarchitecture methods ###
 
 def plot_sleepcycles(d, plt_stages='all', logscale=True, normx=True):
     """ 
@@ -669,9 +828,10 @@ def plot_spin_means(n, datatype='Raw', spins=True, count=True, buffer=False, err
                     ax1 = ax.twinx()
                     ax1.plot(data[chan, 'count'], color=count_color, alpha=0.3)
                     ax1.fill_between(data.index, 0, data[(chan, 'count')], color=count_color, alpha=0.3)
-                    ax1.set_ylim(0, 50)
-                    ax1.set_yticks(ticks=[0,20,40, 60])
-                    ax1.set_yticklabels(labels=[0,20,40, 60], color=count_color)
+                    max_count = len(n.spindles[chan])
+                    ticks = np.linspace(0, max_count, num=5, dtype=int)
+                    ax1.set_yticks(ticks=ticks)
+                    ax1.set_yticklabels(labels=ticks, color=count_color)
                     ax1.tick_params(axis='y', labelsize=8) #color=count_color)
 
             # set subplot params
