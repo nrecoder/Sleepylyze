@@ -91,8 +91,7 @@ class Dataset:
                 local postgres server password
             psql_database: str (default: 'raw_eeg')
                 postgres database to upload to
-            data_dir: str (default: 'D:\Jackie\RawEEG')
-                directory to save cleaned and condensed raw EEG csv files
+            directory to save cleaned and condensed raw EEG csv files
 
         Returns
         -------
@@ -286,7 +285,7 @@ class Dataset:
         in_memory_csv.seek(0)
         
         # create column names string for SQL table creation
-        cols = [x.lower() for x in self.metadata['channels']]
+        cols = [x.lower() for x in self.metadata['channels'][1:]]
         column_str = []
         for col in cols:
             column_str.append(f'{col} NUMERIC(9,6),')
