@@ -316,7 +316,7 @@ class Dataset:
         # load data
         with engine.begin() as conn2:
             cur = conn2.connection.cursor()
-            cur.copy_from(in_memory_csv, table_name, sep=',', columns= ['time'] + cols, null='')
+            cur.copy_from(in_memory_csv, table_name, sep=',', columns= ['time'] + cols, null="")
         
         # save to condensed csv file
         print('Saving condensed csv file..')
