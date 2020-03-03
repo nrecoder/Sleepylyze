@@ -165,7 +165,12 @@ class Dataset:
         # Find the timestamp cut between seconds 1 & 2, convert to usec
         first_read = s_freq - (firstsec.eq(start_time).sum())
         self.metadata['start_us'] = 1/s_freq*first_read
-         
+        
+        if header[13].split()[3] == 'Stamp': #New eeg gives each data time a stamp
+            self.fileversion = 'NewFile'
+        else:
+            self.fileversion = 'OldFile'
+
     def get_chans(self):
         """ Define the channel list for the detected headbox """
         chans = self.metadata['chans']
@@ -186,6 +191,8 @@ class Dataset:
                 'CP5','CP6','CP1','CP2','OSAT','PR']
             channels = channels_all[:-2]
             channels_rmvd = channels_all[-2:]
+            if self.fileversion == 'NewFile':
+                channels.insert(0, 'Stamp')
             print('Removed the following channels: \n', channels_rmvd)
 
         elif hbsn == 65535 and self.metadata['chans'] == 40: # for IN346B. need to adjust this for other EMU40s
@@ -197,7 +204,9 @@ class Dataset:
                 'T6','O2','F4','C4','P4','EMG','FPz','Pz','AF7','AF8','FC5','FC6','FC1','FC2','CP5','CP6',
                 'CP1','CP2','PO7','PO8','F1','F2','CPz','POz','Oz','EKG']
             channels = channels_all # remove EMGs?
-            
+            if self.fileversion == 'NewFile':
+                channels.insert(0, 'Stamp')
+
         elif hbsn == 65535:
             hbid = "FS128"
             print('Headbox:', hbid)
@@ -208,6 +217,8 @@ class Dataset:
                 'AF8','F8','FC6','T4','CP6','T6','PO8','F1','F2','EOG_L','EOG_R','EKG']
                 # remove any chans here?
             channels = channels_all
+            if self.fileversion == 'NewFile':
+                channels.insert(0, 'Stamp')
 
         self.metadata['hbid'] = hbid
         self.metadata['channels'] = channels
@@ -233,6 +244,10 @@ class Dataset:
         data.index = ind
 
         self.data = data
+
+        if self.fileversion == 'NewFile': 
+            data.drop(columns = ['Stamp'], inplace = True)
+            
         print('Data successfully imported')
 
     def trim_eeg(self, start, end):
