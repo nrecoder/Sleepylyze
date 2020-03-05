@@ -218,6 +218,9 @@ class Dataset:
             channels = channels_all
             if self.fileversion == 'NewFile':
                 channels.insert(0, 'Stamp')
+                StamplessChannels = self.metadata['channels'].remove('Stamp')
+                self.metadata['channels'] = StamplessChannels
+         
 
         self.metadata['hbid'] = hbid
         self.metadata['channels'] = channels
