@@ -525,9 +525,15 @@ class Dataset:
         """
         # read the first line to get starting date & time
         with open(scorefile, 'r') as f:
-                first_epoch = f.readline()
+            first_epoch = f.readline()
+        #test if tab or space between date and time
+            date_time_test = first_epoch.split('\t')[0]
+            if ' ' in date_time_test:
                 start_date = first_epoch.split(' ')[0]
                 start_sec = first_epoch.split(' ')[1].split('\t')[0]
+            else:
+                start_date = date_time_test
+                start_sec = first_epoch.split('\t')[1]
                 
         # read in sleep scores & resample to EEG/EKG frequency
         print('Importing sleep scores...')
