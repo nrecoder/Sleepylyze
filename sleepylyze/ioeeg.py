@@ -218,9 +218,6 @@ class Dataset:
             channels = channels_all
             if self.fileversion == 'NewFile':
                 channels.insert(0, 'Stamp')
-                StamplessChannels = self.metadata['channels'].remove('Stamp')
-                self.metadata['channels'] = StamplessChannels
-         
 
         self.metadata['hbid'] = hbid
         self.metadata['channels'] = channels
@@ -249,7 +246,9 @@ class Dataset:
 
         if self.fileversion == 'NewFile': 
             data.drop(columns = ['Stamp'], inplace = True)
-            
+            self.metadata['channels'].remove('Stamp')
+           
+
         print('Data successfully imported')
 
     def trim_eeg(self, start, end):
@@ -288,7 +287,7 @@ class Dataset:
         in_memory_csv.seek(0)
         
         # create column names string for SQL table creation
-        cols = [x.lower() for x in self.metadata['channels'][1:]]
+        cols = [x.lower() for x in self.metadata['channels']]
         column_str = []
         for col in cols:
             column_str.append(f'{col} NUMERIC(12,6),')
@@ -540,7 +539,7 @@ class Dataset:
                 
         # read in sleep scores & resample to EEG/EKG frequency
         print('Importing sleep scores...')
-        hyp = pd.read_csv(scorefile, delimiter='\t', header=None, names=['Score'], usecols=[1], dtype=float)
+        hyp = pd.read_csv(scorefile, delimiter='\t', header=None, names=['Score'], usecols=[2], dtype=float)
         scores = pd.DataFrame(np.repeat(hyp.values, self.metadata['s_freq']*30,axis=0), columns=hyp.columns)
 
         # reindex to match EEG/EKG data
