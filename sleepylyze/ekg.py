@@ -99,6 +99,8 @@ class EKG:
 
         if smooth == True:
             self.rms_smooth(sm_wn)
+        else:
+        	self.metadata['analysis_info']['smooth'] = False
 
         # detect R peaks
         if detect_peaks == True:
@@ -192,6 +194,7 @@ class EKG:
         
         thres = pd.Series(self.data['EKG_thres'])
         
+
         peaks = []
         x = 0
         while x < len(raw):
