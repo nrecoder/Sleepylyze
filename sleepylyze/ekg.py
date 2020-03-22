@@ -218,6 +218,9 @@ class EKG:
 
         # get time between peaks and convert to mseconds
         self.rr = np.diff(self.rpeaks.index)/np.timedelta64(1, 'ms')
+
+        # create nn so that ibis can be removed
+        self.nn = self.rr
         
         # create rpeaks dataframe and add ibi columm
         rpeaks_df = pd.DataFrame(self.rpeaks)
