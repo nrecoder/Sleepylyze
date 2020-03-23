@@ -204,12 +204,18 @@ class EKG:
                 for h in range(x, len(raw), 1):
                     if raw[h] < thres[h]:
                         roi_end = h
+                        last_ibi = True
                         break
+                if raw[len(raw)-1] > thres[len(raw)-1]:
+                	last_ibi = False
                 # get maximum between roi_start and roi_end
-                peak = raw[x:h].idxmax()
-                peaks.append(peak)
-                # advance the pointer
-                x = h
+                if last_ibi == True:
+                    peak = raw[x:h].idxmax()
+                    peaks.append(peak)
+                    # advance the pointer
+                    x = h
+                else:
+                	break
             else:
                 x += 1
 
