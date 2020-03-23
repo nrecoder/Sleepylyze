@@ -197,27 +197,29 @@ class EKG:
 
         peaks = []
         x = 0
-        while x < len(raw):
+        if raw[len(raw)-1] > thres[len(raw)-1]:
+            for h in range(len(raw)-1, 0, -1):
+                if raw[len(raw)-(h+1)] < thres[len(raw)-(h+1)]:
+                    end = len(raw) - (h+1)
+        else:
+        	end = len(raw)
+        while x < end:
             if raw[x] > thres[x]:
                 roi_start = x
                 # count forwards to find down-crossing
                 for h in range(x, len(raw), 1):
                     if raw[h] < thres[h]:
                         roi_end = h
-                        last_ibi = True
                         break
-                if raw[len(raw)-1] > thres[len(raw)-1]:
-                	last_ibi = False
+    
                 # get maximum between roi_start and roi_end
-                if last_ibi == True:
-                    peak = raw[x:h].idxmax()
-                    peaks.append(peak)
-                    # advance the pointer
-                    x = h
-                else:
-                	break
+                peak = raw[x:h].idxmax()
+                peaks.append(peak)
+                # advance the pointer
+                x = h
             else:
                 x += 1
+
 
         self.rpeaks = raw[peaks]
         print('R peak detection complete')
