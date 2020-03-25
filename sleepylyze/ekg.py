@@ -362,7 +362,7 @@ class EKG:
         # refresh nn values
         self.nn = self.rr    
 
-    def add_peak(self, time, smooth):
+    def add_peak(self, time):
         """ manually add missed peaks 
 
         Parameters
@@ -388,13 +388,13 @@ class EKG:
             if x.hour == int(h) and x.minute == int(m) and x.second == int(s) and x.microsecond >= int(us_min) and x.microsecond <= int(us_max):
                 roi.append(x)
 
-        if smooth == False:
+        if self.metadata['analysis_info']['smooth'] == False:
         # define new rpeak
             peak_idx = self.data.loc[roi]['Raw'].idxmax()
             peak_val = self.data['Raw'].loc[peak_idx]
             new_peak = pd.Series(peak_val, [peak_idx])
 
-        if smooth == True:
+        if self.metadata['analysis_info']['smooth'] == True:
             peak_idx = self.data.loc[roi]['raw_smooth'].idxmax()
             peak_val = self.data['raw_smooth'].loc[peak_idx]
             new_peak = pd.Series(peak_val, [peak_idx])
